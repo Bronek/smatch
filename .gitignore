@@ -1,0 +1,8 @@
+*.o
+*.gch
+sets
+test
+test.log
+*.swp
+.depend
+~$*.doc
