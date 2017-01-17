@@ -1,7 +1,7 @@
 #include <iostream>
 #include <stdexcept>
 
-#include "lib/engine.hpp"
+#include "engine.hpp"
 
 int main(int , char** )
 {
