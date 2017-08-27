@@ -5,15 +5,15 @@
 #include <sstream>
 #include <cassert>
 
-#include "engine.hpp"
+#include "runner.hpp"
 
 TEST(utest_basic, test_not_infinite_loop)
 {
     using namespace smatch;
     std::istringstream in;
     std::ostringstream out;
-    Engine engine;
-    engine.run(in, out);
+    Engine en;
+    Runner::run(en, in, out);
     EXPECT_TRUE(true); // i.e. not infinite loop above
 }
 
@@ -48,8 +48,8 @@ TEST(utest_basic, test_exception_handling)
     Dummy d1, d2;
     bool thrown = false;
     try {
-        Engine engine;
-        engine.run(d1, d2);
+        Engine en;
+        Runner::run(en, d1, d2);
     } catch (TestException) {
         thrown = true;
     }
@@ -90,11 +90,11 @@ TEST(utest_order_cancel, test_order_and_cancel)
 {
     using namespace smatch;
     const unsigned int id1 = 1;
-    Engine me;
+    Engine en;
 
     Input i1 { Order { Side::Buy, id1, 1020, 100, 100, 100, 0 } };
     Dummy d;
-    me.handle(i1, d);
+    Runner::handle(i1, en, d);
     EXPECT_TRUE(d.fills.empty());
     ASSERT_EQ(d.book.size(), 1);
     const auto& o1 = d.book.front();
@@ -105,14 +105,14 @@ TEST(utest_order_cancel, test_order_and_cancel)
 
     Input i2 { Cancel { id1 } };
     d.reset();
-    me.handle(i2, d);
+    Runner::handle(i2, en, d);
     EXPECT_TRUE(d.fills.empty());
     EXPECT_TRUE(d.book.empty());
 
     const unsigned int id2 = 2;
     Input i3 { Order { Side::Sell, id2, 1030, 50, 100, 50, 0 } };
     d.reset();
-    me.handle(i3, d);
+    Runner::handle(i3, en, d);
     EXPECT_TRUE(d.fills.empty());
     ASSERT_EQ(d.book.size(), 1);
     const auto& o2 = d.book.front();
@@ -123,7 +123,7 @@ TEST(utest_order_cancel, test_order_and_cancel)
 
     Input i4 { Cancel { id2 } };
     d.reset();
-    me.handle(i4, d);
+    Runner::handle(i4, en, d);
     EXPECT_TRUE(d.fills.empty());
     EXPECT_TRUE(d.book.empty());
 }
@@ -131,7 +131,7 @@ TEST(utest_order_cancel, test_order_and_cancel)
 TEST(utest_order_cancel, test_order_and_cancel_from_stream)
 {
     using namespace smatch;
-    Engine me;
+    Engine en;
     const unsigned int id1 = 1;
     const unsigned int id2 = 2;
 
@@ -148,7 +148,7 @@ TEST(utest_order_cancel, test_order_and_cancel_from_stream)
     EXPECT_TRUE(read(t, in));
     EXPECT_TRUE(not t.empty());
     Dummy d;
-    me.handle(t, d);
+    Runner::handle(t, en, d);
     EXPECT_TRUE(d.fills.empty());
     ASSERT_EQ(d.book.size(), 1);
     const auto& o1 = d.book.front();
@@ -160,7 +160,7 @@ TEST(utest_order_cancel, test_order_and_cancel_from_stream)
     EXPECT_TRUE(read(t, in));
     EXPECT_TRUE(not t.empty());
     d.reset();
-    me.handle(t, d);
+    Runner::handle(t, en, d);
     EXPECT_TRUE(d.fills.empty());
     ASSERT_EQ(d.book.size(), 2);
     const auto& o2 = d.book[0];
@@ -177,7 +177,7 @@ TEST(utest_order_cancel, test_order_and_cancel_from_stream)
     EXPECT_TRUE(read(t, in));
     EXPECT_TRUE(not t.empty());
     d.reset();
-    me.handle(t, d);
+    Runner::handle(t, en, d);
     EXPECT_TRUE(d.fills.empty());
     ASSERT_EQ(d.book.size(), 1);
     const auto& o4 = d.book.front();
@@ -189,7 +189,7 @@ TEST(utest_order_cancel, test_order_and_cancel_from_stream)
     EXPECT_TRUE(read(t, in));
     EXPECT_TRUE(not t.empty());
     d.reset();
-    me.handle(t, d);
+    Runner::handle(t, en, d);
     EXPECT_TRUE(d.fills.empty());
     EXPECT_TRUE(d.book.empty());
 
@@ -199,7 +199,7 @@ TEST(utest_order_cancel, test_order_and_cancel_from_stream)
 TEST(utest_matching, test_order_and_match)
 {
     using namespace smatch;
-    Engine me;
+    Engine en;
     std::istringstream in (
         "I B 1 1020 170 50\n"
         "L S 2 1020 100\n"
@@ -212,7 +212,7 @@ TEST(utest_matching, test_order_and_match)
     EXPECT_TRUE(read(t, in));
     EXPECT_TRUE(not t.empty());
     Dummy d;
-    me.handle(t, d);
+    Runner::handle(t, en, d);
     EXPECT_TRUE(d.fills.empty());
     ASSERT_EQ(d.book.size(), 1);
     const auto& o1 = d.book.front();
@@ -225,7 +225,7 @@ TEST(utest_matching, test_order_and_match)
     EXPECT_TRUE(read(t, in));
     EXPECT_TRUE(not t.empty());
     d.reset();
-    me.handle(t, d);
+    Runner::handle(t, en, d);
     ASSERT_EQ(d.fills.size(), 1);
     const auto& f1 = d.fills.front();
     EXPECT_EQ(f1.buyId, 1);
@@ -244,7 +244,7 @@ TEST(utest_matching, test_order_and_match)
     EXPECT_TRUE(read(t, in));
     EXPECT_TRUE(not t.empty());
     d.reset();
-    me.handle(t, d);
+    Runner::handle(t, en, d);
     ASSERT_EQ(d.fills.size(), 1);
     const auto& f2 = d.fills.front();
     EXPECT_EQ(f2.buyId, 1);
@@ -269,13 +269,13 @@ TEST(utest_matching, test_comp_sorting_buys)
         "L B 3 1030 200\n"
         "L B 4 1010 200\n");
     std::ostringstream out;
-    Engine engine;
-    engine.run(in, out);
+    Engine en;
+    Runner::run(en, in, out);
 
     out.str("");
     std::istringstream in2 (
         "L B 5 1000 200\n");
-    engine.run(in2, out);
+    Runner::run(en, in2, out);
     EXPECT_EQ(out.str(), std::string(
         "O B 3 1030 200\n"
         "O B 1 1010 200\n"
@@ -286,7 +286,7 @@ TEST(utest_matching, test_comp_sorting_buys)
     out.str("");
     std::istringstream in3 (
         "C 3\n");
-    engine.run(in3, out);
+    Runner::run(en, in3, out);
     EXPECT_EQ(out.str(), std::string(
         "O B 1 1010 200\n"
         "O B 2 1010 200\n"
@@ -296,7 +296,7 @@ TEST(utest_matching, test_comp_sorting_buys)
     out.str("");
     std::istringstream in4 (
         "L B 6 1020 200\n");
-    engine.run(in4, out);
+    Runner::run(en, in4, out);
     EXPECT_EQ(out.str(), std::string(
         "O B 6 1020 200\n"
         "O B 1 1010 200\n"
@@ -307,7 +307,7 @@ TEST(utest_matching, test_comp_sorting_buys)
     out.str("");
     std::istringstream in5 (
         "C 4\n");
-    engine.run(in5, out);
+    Runner::run(en, in5, out);
     EXPECT_EQ(out.str(), std::string(
         "O B 6 1020 200\n"
         "O B 1 1010 200\n"
@@ -317,7 +317,7 @@ TEST(utest_matching, test_comp_sorting_buys)
     out.str("");
     std::istringstream in6 (
         "L S 7 1010 450\n");
-    engine.run(in6, out);
+    Runner::run(en, in6, out);
     EXPECT_EQ(out.str(), std::string(
         "M 6 7 1020 200\n"
         "M 1 7 1010 200\n"
@@ -328,7 +328,7 @@ TEST(utest_matching, test_comp_sorting_buys)
     out.str("");
     std::istringstream in7 (
         "L B 8 1020 200\n");
-    engine.run(in7, out);
+    Runner::run(en, in7, out);
     EXPECT_EQ(out.str(), std::string(
         "O B 8 1020 200\n"
         "O B 2 1010 150\n"
@@ -337,7 +337,7 @@ TEST(utest_matching, test_comp_sorting_buys)
     out.str("");
     std::istringstream in8 (
         "L B 9 1010 200\n");
-    engine.run(in8, out);
+    Runner::run(en, in8, out);
     EXPECT_EQ(out.str(), std::string(
         "O B 8 1020 200\n"
         "O B 2 1010 150\n"
@@ -354,13 +354,13 @@ TEST(utest_matching, test_comp_sorting_sells)
         "L S 3 1000 200\n"
         "L S 4 1010 200\n");
     std::ostringstream out;
-    Engine engine;
-    engine.run(in, out);
+    Engine en;
+    Runner::run(en, in, out);
 
     out.str("");
     std::istringstream in2 (
         "L S 5 1020 200\n");
-    engine.run(in2, out);
+    Runner::run(en, in2, out);
     EXPECT_EQ(out.str(), std::string(
         "O S 3 1000 200\n"
         "O S 1 1010 200\n"
@@ -371,7 +371,7 @@ TEST(utest_matching, test_comp_sorting_sells)
     out.str("");
     std::istringstream in3 (
         "C 3\n");
-    engine.run(in3, out);
+    Runner::run(en, in3, out);
     EXPECT_EQ(out.str(), std::string(
         "O S 1 1010 200\n"
         "O S 2 1010 200\n"
@@ -381,7 +381,7 @@ TEST(utest_matching, test_comp_sorting_sells)
     out.str("");
     std::istringstream in4 (
         "L S 6 1000 200\n");
-    engine.run(in4, out);
+    Runner::run(en, in4, out);
     EXPECT_EQ(out.str(), std::string(
         "O S 6 1000 200\n"
         "O S 1 1010 200\n"
@@ -392,7 +392,7 @@ TEST(utest_matching, test_comp_sorting_sells)
     out.str("");
     std::istringstream in5 (
         "C 4\n");
-    engine.run(in5, out);
+    Runner::run(en, in5, out);
     EXPECT_EQ(out.str(), std::string(
         "O S 6 1000 200\n"
         "O S 1 1010 200\n"
@@ -402,7 +402,7 @@ TEST(utest_matching, test_comp_sorting_sells)
     out.str("");
     std::istringstream in6 (
         "L B 7 1010 450\n");
-    engine.run(in6, out);
+    Runner::run(en, in6, out);
     EXPECT_EQ(out.str(), std::string(
         "M 7 6 1000 200\n"
         "M 7 1 1010 200\n"
@@ -413,7 +413,7 @@ TEST(utest_matching, test_comp_sorting_sells)
     out.str("");
     std::istringstream in7 (
         "L S 8 1000 200\n");
-    engine.run(in7, out);
+    Runner::run(en, in7, out);
     EXPECT_EQ(out.str(), std::string(
         "O S 8 1000 200\n"
         "O S 2 1010 150\n"
@@ -422,7 +422,7 @@ TEST(utest_matching, test_comp_sorting_sells)
     out.str("");
     std::istringstream in8 (
         "L S 9 1010 200\n");
-    engine.run(in8, out);
+    Runner::run(en, in8, out);
     EXPECT_EQ(out.str(), std::string(
         "O S 8 1000 200\n"
         "O S 2 1010 150\n"
@@ -438,8 +438,8 @@ TEST(utest_matching, test_comp_iceberg_match1)
     "I S 2 1010 200 50\n"
     "L S 3 1010 200\n");
     std::ostringstream out;
-    Engine engine;
-    engine.run(in, out);
+    Engine en;
+    Runner::run(en, in, out);
     EXPECT_EQ(out.str(), std::string(
     "O S 1 1000 50\n"
     "O S 1 1000 50\n"
@@ -451,7 +451,7 @@ TEST(utest_matching, test_comp_iceberg_match1)
     out.str("");
     std::istringstream in2 (
     "L B 4 1010 70\n");
-    engine.run(in2, out);
+    Runner::run(en, in2, out);
     EXPECT_EQ(out.str(), std::string(
     "M 4 1 1000 50\n"
     "M 4 2 1010 20\n"
@@ -461,7 +461,7 @@ TEST(utest_matching, test_comp_iceberg_match1)
     out.str("");
     std::istringstream in3 (
     "L B 4 1010 30\n");
-    engine.run(in3, out);
+    Runner::run(en, in3, out);
     EXPECT_EQ(out.str(), std::string(
     "M 4 2 1010 30\n"
     "O S 3 1010 200\n"
@@ -477,13 +477,13 @@ TEST(utest_matching, test_comp_iceberg_match2)
     "L S 2 100 7500\n"
     "L B 4 99 50000\n");
     std::ostringstream out;
-    Engine engine;
-    engine.run(in, out);
+    Engine en;
+    Runner::run(en, in, out);
 
     out.str("");
     std::istringstream in2 (
     "L B 5 98 25500\n");
-    engine.run(in2, out);
+    Runner::run(en, in2, out);
     EXPECT_EQ(out.str(), std::string(
     "O B 4 99 50000\n"
     "O B 5 98 25500\n"
@@ -496,7 +496,7 @@ TEST(utest_matching, test_comp_iceberg_match2)
     out.str("");
     std::istringstream in3 (
     "I B 6 100 100000 10000\n");
-    engine.run(in3, out);
+    Runner::run(en, in3, out);
     EXPECT_EQ(out.str(), std::string(
     "M 6 1 100 10000\n"
     "M 6 2 100 7500\n"
@@ -510,7 +510,7 @@ TEST(utest_matching, test_comp_iceberg_match2)
     out.str("");
     std::istringstream in4 (
     "L S 7 100 10000\n");
-    engine.run(in4, out);
+    Runner::run(en, in4, out);
     EXPECT_EQ(out.str(), std::string(
     "M 6 7 100 10000\n"
     "O B 6 100 10000\n"
@@ -523,7 +523,7 @@ TEST(utest_matching, test_comp_iceberg_match2)
     out.str("");
     std::istringstream in5 (
     "L S 8 100 11000\n");
-    engine.run(in5, out);
+    Runner::run(en, in5, out);
     EXPECT_EQ(out.str(), std::string(
     "M 6 8 100 11000\n"
     "O B 6 100 9000\n"
@@ -535,7 +535,7 @@ TEST(utest_matching, test_comp_iceberg_match2)
     out.str("");
     std::istringstream in6 (
     "I B 9 100 50000 20000\n");
-    engine.run(in6, out);
+    Runner::run(en, in6, out);
     EXPECT_EQ(out.str(), std::string(
     "O B 6 100 9000\n"
     "O B 9 100 20000\n"
@@ -547,7 +547,7 @@ TEST(utest_matching, test_comp_iceberg_match2)
     out.str("");
     std::istringstream in7 (
     "L S 10 100 35000\n");
-    engine.run(in7, out);
+    Runner::run(en, in7, out);
     EXPECT_EQ(out.str(), std::string(
     "M 6 10 100 15000\n"
     "M 9 10 100 20000\n"
@@ -563,7 +563,7 @@ TEST(utest_matching, test_comp_iceberg_match2)
     out.str("");
     std::istringstream in8 (
     "L S 11 100 4000\n");
-    engine.run(in8, out);
+    Runner::run(en, in8, out);
     EXPECT_EQ(out.str(), std::string(
     "M 6 11 100 4000\n"
     "O B 9 100 20000\n"
@@ -576,7 +576,7 @@ TEST(utest_matching, test_comp_iceberg_match2)
     out.str("");
     std::istringstream in9 (
     "L S 12 100 30000\n");
-    engine.run(in9, out);
+    Runner::run(en, in9, out);
     EXPECT_EQ(out.str(), std::string(
     "M 9 12 100 20000\n"
     "M 6 12 100 10000\n"

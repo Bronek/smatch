@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <limits>
+#include <stdexcept>
 
 namespace smatch {
 
@@ -18,6 +19,16 @@ enum class Side : char
 inline std::ostream& operator<< (std::ostream& o, Side s)
 {
     return (o << static_cast<char>(s));
+}
+
+inline bool parse(Side& s, char c)
+{
+    switch (c)
+    {
+        case 'B' : s = Side::Buy; return true;
+        case 'S' : s = Side::Sell; return true;
+        default: return false;
+    }
 }
 
 struct Order
@@ -45,6 +56,12 @@ struct Match
     uint sellId;
     uint price;
     uint size;
+};
+
+struct exception : std::runtime_error
+{
+    explicit exception(const char* sz) : std::runtime_error(sz)
+    { }
 };
 
 }

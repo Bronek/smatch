@@ -4,53 +4,51 @@
 
 namespace smatch {
 
+struct bad_order_id : smatch::exception
+{
+    using exception::exception;
+};
+
 Order& Book::insert(const Order& o)
 {
-    // Build PricePriority for price and priority of the order. Since on each insert
-    // we bump priority_, each such constructed PricePriority will be unique.
-    const PricePriority pp { o.price , ++priority_ };
+    // BuySell is what we store in ids_, to allow us to quickly find orders by id
+    const auto it = ids_.emplace(
+        o.id , BuySell { buys_.end() , sells_.end() }
+    );
 
-    // OrderSide is what we store in ids_, to allow us to quickly find orders by id
-    OrderSide os { buys_.end() , sells_.end() };
+    // Enforce that ids are unique
+    if (not it.second)
+        throw bad_order_id("Order id must be unique");
+
+    // A shortcut for storing buy or sell iterator into BuySell we just inserted into ids_
+    auto& os = it.first->second;
+
+    // Build Priority for price and priority of the order. Since on each insert
+    // we bump serial_, each such constructed Priority will be unique.
+    const Priority pp { o.price , ++serial_ };
 
     // Store an order (limit or iceberg) in an appropriate collection buys_ or sells_
-    // and persist the iterator for this element in OrderSide created above.
-    Order* result = nullptr;
-    if (o.side == Side::Buy)
-    {
-        os.itb = buys_.emplace(std::make_pair(pp, o)).first;
-        result = &os.itb->second;
+    // and persist the iterator for this element in BuySell created above.
+    if (o.side == Side::Buy) {
+        os.buy = buys_.emplace(pp, o).first;
+        return os.buy->second;
     }
-    else
-    {
-        os.its = sells_.emplace(std::make_pair(pp, o)).first;
-        result = &os.its->second;
+    else {
+        os.sell = sells_.emplace(pp, o).first;
+        return os.sell->second;
     }
-
-    // Here we store the iterators with id, also enforcing that id are unique
-    if (not ids_.emplace(std::make_pair(o.id, os)).second)
-    {
-        if (os.itb != buys_.end())
-            buys_.erase(os.itb);
-        else // if (os.its != sells_.end())
-            sells_.erase(os.its);
-
-        throw std::runtime_error("Order id must be unique");
-    }
-
-    return *result;
 }
 
 void Book::remove(uint id)
 {
     const auto i = ids_.find(id);
     if (i == ids_.end())
-        throw std::runtime_error("Order id is invalid");
+        throw bad_order_id("Order id is invalid");
 
-    if (i->second.itb != buys_.end())
-        buys_.erase(i->second.itb);
-    else // if (i->second.its != sells_.end() )
-        sells_.erase(i->second.its);
+    if (i->second.buy != buys_.end())
+        buys_.erase(i->second.buy);
+    else // if (i->second.sell != sells_.end() )
+        sells_.erase(i->second.sell);
 
     ids_.erase(i);
 }
@@ -60,7 +58,7 @@ void Book::match(Order& active, std::vector<Match>& matches)
 {
     // Special value for active.match, set at the bottom of this function. "0" is not good because
     // the purpose of active.match is to identify Match for matched order in matches vector, and of course
-    // first match added to this collection will be 0
+    // first match added to this collection will have index 0
     constexpr auto unmatched = std::numeric_limits<size_t>::max();
 
     // Active order is on "this side" and it will be matched against orders on the "opposite side"

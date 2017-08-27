@@ -10,10 +10,12 @@ else()
         book.cpp
         book.hpp
         engine.hpp
+        runner.hpp
         input.cpp
         input.hpp
         streams.hpp
-        types.hpp)
+        types.hpp
+        )
 
    add_library(${PROJECT_NAME} ${SOURCE_FILES})
 endif()

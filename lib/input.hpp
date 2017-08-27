@@ -24,7 +24,7 @@ class Input
 
     // These need to be defined in a .cpp, after full definition of Engine. The return value is
     // to be set by callee of the functions below (Engine) and interpreted by caller of update()
-    bool order(Engine&) const;
+    template <Side side> bool order(Engine&) const;
     bool cancel(Engine&) const;
     bool noop(Engine&) const
     {
@@ -35,7 +35,8 @@ public:
     Input() : type(&Input::noop)
     { }
 
-    explicit Input(const Order& o) : type(&Input::order)
+    explicit Input(const Order& o)
+        : type(o.side == Side::Buy ? &Input::order<Side::Buy> : &Input::order<Side::Sell>)
     {
         input.o = o;
     }

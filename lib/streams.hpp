@@ -6,15 +6,10 @@
 
 namespace smatch {
 
-inline bool parse(Side& s, char c)
+struct bad_input : smatch::exception
 {
-    switch (c)
-    {
-        case 'B' : s = Side::Buy; return true;
-        case 'S' : s = Side::Sell; return true;
-        default: return false;
-    }
-}
+    using exception::exception;
+};
 
 inline bool read(Input& input, std::istream& in)
 {
@@ -34,7 +29,7 @@ inline bool read(Input& input, std::istream& in)
             char dummy, side, sentinel;
             if (std::sscanf(line.c_str(), "%c %c %u %u %u%c", &dummy, &side, &o.id, &o.price, &o.size, &sentinel) != 5
                 || not parse(o.side, side))
-                throw std::runtime_error("Ill-formed limit order");
+                throw bad_input("Ill-formed limit order");
             o.peak = o.full = o.size;
             input = Input(o);
             break;
@@ -45,7 +40,7 @@ inline bool read(Input& input, std::istream& in)
             if (std::sscanf(line.c_str(), "%c %c %u %u %u %u%c", &dummy, &side, &o.id, &o.price, &o.full, &o.peak, &sentinel) != 6
                 || not parse(o.side, side)
                 || o.peak > o.full)
-                throw std::runtime_error("Ill-formed iceberg order");
+                throw bad_input("Ill-formed iceberg order");
             o.size = o.peak;
             input = Input(o);
             break;
@@ -54,12 +49,12 @@ inline bool read(Input& input, std::istream& in)
             Cancel c;
             char dummy, sentinel;
             if (std::sscanf(line.c_str(), "%c %u%c", &dummy, &c.id, &sentinel) != 2)
-                throw std::runtime_error("Ill-formed cancel");
+                throw bad_input("Ill-formed cancel");
             input = Input(c);
             break;
         }
         default:
-            throw std::runtime_error("Unrecognized input");
+            throw bad_input("Unrecognized input type");
     }
     return true;
 }
