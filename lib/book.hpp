@@ -25,8 +25,8 @@ class Book
     };
 
     // Two distinct types to store buy and sell orders, because different sort order
-    typedef std::map<PricePriority, Order, SortOrder<Side::Buy>> buys_t;
-    typedef std::map<PricePriority, Order, SortOrder<Side::Sell>> sells_t;
+    using buys_t = std::map<PricePriority, Order, SortOrder<Side::Buy>> ;
+    using sells_t = std::map<PricePriority, Order, SortOrder<Side::Sell>>;
 
     // This structure is to aid finding an order in buys_ or sells_, given an id. We can simply store
     // iterators because these are never invalidated by ordinary operations we do on a map, like insert
@@ -38,9 +38,6 @@ class Book
 
     buys_t                              buys_;
     sells_t                             sells_;
-    // These two are shortcuts to buys_.end() and sells_.end()
-    const buys_t::iterator              buysEnd_;
-    const sells_t::iterator             sellsEnd_;
     std::unordered_map<uint, OrderSide> ids_;
 
     // For sorting of orders by time priority, used as-if it was monotonically increasing timestamp.
@@ -48,10 +45,10 @@ class Book
     uint64_t                            priority_;
 
 public:
-    Book() : buysEnd_(buys_.end()), sellsEnd_(sells_.end()), priority_(0)
+    Book() : priority_(0)
     { }
 
-    Order* insert(const Order& o);
+    Order& insert(const Order& o);
     void remove(uint id);
     template <Side side> void match(Order& active, std::vector<Match>& matches);
     template <Side side> std::map<PricePriority, Order, SortOrder<side>>& orders();

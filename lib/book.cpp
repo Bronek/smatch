@@ -4,13 +4,15 @@
 
 namespace smatch {
 
-Order* Book::insert(const Order& o)
+Order& Book::insert(const Order& o)
 {
     // Build PricePriority for price and priority of the order. Since on each insert
     // we bump priority_, each such constructed PricePriority will be unique.
-    PricePriority pp = { o.price , ++priority_ };
+    const PricePriority pp { o.price , ++priority_ };
+
     // OrderSide is what we store in ids_, to allow us to quickly find orders by id
-    OrderSide os = { buysEnd_, sellsEnd_ };
+    OrderSide os { buys_.end() , sells_.end() };
+
     // Store an order (limit or iceberg) in an appropriate collection buys_ or sells_
     // and persist the iterator for this element in OrderSide created above.
     Order* result = nullptr;
@@ -24,43 +26,57 @@ Order* Book::insert(const Order& o)
         os.its = sells_.emplace(std::make_pair(pp, o)).first;
         result = &os.its->second;
     }
-    // Here we store the iterators with id, also enforcing that id are unique
-    if (!ids_.emplace(std::make_pair(o.id, os)).second)
-        throw std::runtime_error("Order id must be unique");
 
-    return result;
+    // Here we store the iterators with id, also enforcing that id are unique
+    if (not ids_.emplace(std::make_pair(o.id, os)).second)
+    {
+        if (os.itb != buys_.end())
+            buys_.erase(os.itb);
+        else // if (os.its != sells_.end())
+            sells_.erase(os.its);
+
+        throw std::runtime_error("Order id must be unique");
+    }
+
+    return *result;
 }
 
 void Book::remove(uint id)
 {
-    auto i = ids_.find(id);
+    const auto i = ids_.find(id);
     if (i == ids_.end())
         throw std::runtime_error("Order id is invalid");
-    if (i->second.itb != buysEnd_)
+
+    if (i->second.itb != buys_.end())
         buys_.erase(i->second.itb);
-    else // if (i->second.its != sellsEnd_ )
+    else // if (i->second.its != sells_.end() )
         sells_.erase(i->second.its);
+
     ids_.erase(i);
 }
 
 template <Side side>
 void Book::match(Order& active, std::vector<Match>& matches)
 {
+    // Special value for active.match, set at the bottom of this function. "0" is not good because
+    // the purpose of active.match is to identify Match for matched order in matches vector, and of course
+    // first match added to this collection will be 0
+    constexpr auto unmatched = std::numeric_limits<size_t>::max();
+
     // Active order is on "this side" and it will be matched against orders on the "opposite side"
     constexpr auto opposite = (side == Side::Buy ? Side::Sell : Side::Buy);
     auto& orders = this->orders<opposite>();
     size_t count = 0; // Partially matched orders
-    while (active.size > 0 && !orders.empty())
+    while (active.size > 0 && not orders.empty())
     {
-        const auto begin = orders.begin();
-        auto& top = begin->second;
+        auto& top = orders.begin()->second;
         if (side == Side::Buy && active.price < top.price)
             break;
         else if (side == Side::Sell && active.price > top.price)
             break;
 
         const uint size = std::min(active.size, top.size);
-        if (top.match == Order::unmatched)
+        if (top.match == unmatched)
         {
             ++count;
             Match match;
@@ -72,15 +88,29 @@ void Book::match(Order& active, std::vector<Match>& matches)
             matches.push_back(match);
         }
         matches[top.match].size += size;
-        // Remove liquidity from active order
-        active.size -= size;
+
+        // Remove liquidity from active order, reset size if it is an iceberg
+        active.full -= size;
+        active.size = std::min(active.full, active.peak);
+
         // Remove liquidity from top order
         top.size -= size;
+        top.full -= size;
+
+        // This section could be slightly optimized by replacing calls to remove() and insert()
+        // with custom tailored modifications of both ids_ and orders collections
         if (top.size == 0)
         {
-            --count;
-            ids_.erase(top.id);
-            orders.erase(begin);
+            const Order copy = top;
+            remove(copy.id);
+            // Must not use top below this point
+            if (copy.full > 0)
+            {
+                auto& renew = insert(copy);
+                renew.size = std::min(copy.full, copy.peak);
+            }
+            else
+                --count;
         }
     }
 
@@ -88,13 +118,13 @@ void Book::match(Order& active, std::vector<Match>& matches)
     size_t i = 0;
     for (auto& o : orders)
     {
-        if (o.second.match == Order::unmatched)
+        if (o.second.match == unmatched)
             continue;
-        o.second.match = Order::unmatched;
+        o.second.match = unmatched;
         if (++i == count)
             break;
     }
-    active.match = Order::unmatched;
+    active.match = unmatched;
 }
 
 // Explicit instantiations of the above, for Engine::handle() to use

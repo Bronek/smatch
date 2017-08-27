@@ -11,10 +11,8 @@ namespace smatch {
 
 class Engine
 {
-    Book                                book_;
-    // These two are used inside handle() as-if on stack, but created only once
-    std::vector<Match>                  matches_;
-    Order                               active_;
+    Book    book_;
+    Order   active_;
 
     // The two functions below are not meant to be public interface of Engine, so we make them private.
     // However Input needs to access them, so make it a friend. Paradoxically this improves encapsulation
@@ -23,7 +21,7 @@ class Engine
 
     bool order(const Order& o)
     {
-        // Copy order received to active order
+        // Copy order received to active_ order
         active_ = o;
         return true;
     }
@@ -56,23 +54,28 @@ public:
         if (i.empty())
             return;
 
-        // The return value of Input.update() is either from order() or cancel() above
-        if (i.update(*this))
-        {
-            matches_.clear();
-            if (active_.side == Side::Buy)
-                book_.match<Side::Buy>(active_, matches_);
-            else
-                book_.match<Side::Sell>(active_, matches_);
+        // This vector is used as-if on stack, but created only once as performance optimization
+        static thread_local std::vector<Match> matches;
 
-            // If there is any remaining liquidity in the active order, add it to the book
+        // The return value of Input.update() is either from order() or cancel() above
+        if (i.handle(*this))
+        {
+            if (active_.side == Side::Buy)
+                book_.match<Side::Buy>(active_, matches);
+            else
+                book_.match<Side::Sell>(active_, matches);
+
+            // If there is any remaining liquidity in the active_ order, add it to the book
             if (active_.size > 0)
                 book_.insert(active_);
 
-            for (const auto& m : matches_)
+            for (const auto& m : matches)
                 wr.write(m);
+
+            matches.clear();
         }
         // else no matching needed
+
         for (const auto& b : book_.orders<Side::Buy>())
             wr.write(b.second);
         for (const auto& s : book_.orders<Side::Sell>())

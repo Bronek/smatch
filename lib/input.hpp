@@ -45,7 +45,7 @@ public:
         input.c = c;
     }
 
-    bool update(Engine& e) const
+    bool handle(Engine& e) const
     {
         return (this->*type)(e);
     }
