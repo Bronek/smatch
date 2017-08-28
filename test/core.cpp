@@ -53,15 +53,19 @@ TEST_CASE("exceptions when parsing or handling bad input are swallowed", "[core]
     std::istringstream in (
         "L B 1 100\n" // too few inputs
         "I B 1 1020 100 50 50\n" // too many inputs
-        "O B 1 1020 100\n" // unrecognized
+        "F B 1 1020 100\n" // unrecognized
         "C 100\n" // correct format, but invalid order id
         "L S 1 1020 100\n" // want to see this one on output
         "L S 1 1020 100\n" // duplicate order id
+        "M B 2 100\n" // market order
     );
     std::ostringstream out;
     Engine en;
     REQUIRE_NOTHROW(Runner::run(en, in, out));
-    REQUIRE(out.str() == "O S 1 1020 100\n");
+    REQUIRE(out.str() ==
+        "O S 1 1020 100\n"
+        "M 2 1 1020 100\n"
+    );
 }
 
 TEST_CASE("parsing stream inputs", "[core][parsing]") {
@@ -71,13 +75,17 @@ TEST_CASE("parsing stream inputs", "[core][parsing]") {
         "# Test\n"
         "\n"
         "L B 1 100\n" // too few inputs
-        "L B 1 1020 100\n"
+        "L U 1 1020 100\n"
+        "L S 1 1020 100\n"
         "I B 1 1020 100 50\n"
         "I B 1 1020 100 50 50\n" // too many inputs
         "C\n" // too few inputs
         "C A\n" // wrong number format (decimal expected)
         "C 1\n"
-        "O B 1 1020 100\n" // unrecognized, should be L
+        "M S 1\n" // too few inputs
+        "M S 1 200\n"
+        "O B 1 1020 100\n"
+        "F B 1 1020 100\n" // unrecognized
     );
 
     Input t;
@@ -92,6 +100,8 @@ TEST_CASE("parsing stream inputs", "[core][parsing]") {
 
     REQUIRE_THROWS_AS(read(t, in), bad_input); // too few inputs
 
+    REQUIRE_THROWS_AS(read(t, in), bad_input); // unrecognized side 'U'
+
     REQUIRE(read(t, in)); // limit order
     REQUIRE(not t.empty());
 
@@ -105,6 +115,12 @@ TEST_CASE("parsing stream inputs", "[core][parsing]") {
     REQUIRE_THROWS_AS(read(t, in), bad_input); // wrong number format
 
     REQUIRE(read(t, in)); // cancel
+
+    REQUIRE_THROWS_AS(read(t, in), bad_input); // too few inputs
+
+    REQUIRE(read(t, in)); // market order
+
+    REQUIRE(read(t, in)); // aggress order
 
     REQUIRE_THROWS_AS(read(t, in), bad_input); // unrecognized
 

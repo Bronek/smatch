@@ -40,6 +40,7 @@ struct Order
     uint size;
     uint full;
     uint peak;
+    bool add;
 
     // Reserved for matching engine
     size_t match;

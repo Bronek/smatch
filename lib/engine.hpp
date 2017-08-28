@@ -29,7 +29,7 @@ public:
         book_.match<side>(active, matches_);
 
         // If there is any remaining liquidity in the active order, add it to the book_
-        if (active.size > 0)
+        if (active.add && active.size > 0)
             book_.insert(active);
 
         return not matches_.empty();
