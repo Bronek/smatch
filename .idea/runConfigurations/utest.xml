@@ -1,6 +1,0 @@
-<component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="utest" type="CMakeGoogleTestRunConfigurationType" factoryName="Google Test" PASS_PARENT_ENVS_2="true" PROJECT_NAME="smatch" TARGET_NAME="utest" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="smatch" RUN_TARGET_NAME="utest" TEST_MODE="SUITE_TEST">
-    <envs />
-    <method />
-  </configuration>
-</component>
