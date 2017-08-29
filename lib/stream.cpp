@@ -1,29 +1,19 @@
-#pragma once
-
-#include <iostream>
-#include <stdexcept>
-#include <cstdio>
+#include "stream.hpp"
+#include "input.hpp"
+#include "book.hpp"
 
 namespace smatch {
 
-struct bad_input : smatch::exception
-{
-    using exception::exception;
-};
-
-inline bool read(Input& input, std::istream& in)
-{
+bool Stream::read(Input &input) {
     std::string line;
     if (not std::getline(in, line))
         return false; // EOF
 
-    if (line.empty() || line[0] == '#')
-    {
+    if (line.empty() || line[0] == '#') {
         input = Input(); // i.e. empty, will be skipped
         return true;
-    }
-    else switch (line[0])
-    {
+    } else
+    switch (line[0]) {
         case 'M': {
             Order o;
             o.add = false;
@@ -87,27 +77,13 @@ inline bool read(Input& input, std::istream& in)
     return true;
 }
 
-struct OstreamWriter
+bool Stream::report(const exception& e, bool)
 {
-    std::ostream& out;
-
-    explicit OstreamWriter(std::ostream& s) : out(s)
-    { }
-
-    void write(const Match& m)
-    {
-        out << "M " << m.buyId << ' ' << m.sellId << ' ' << m.price << ' ' << m.size << std::endl;
-    }
-
-    void write(const Order& o)
-    {
-        out << "O " << o.side << ' ' << o.id << ' ' << o.price << ' ' << o.size << std::endl;
-    }
-};
-
-inline OstreamWriter writer(std::ostream& s)
-{
-    return OstreamWriter(s);
+    if (const auto* tmp = dynamic_cast<const bad_order_id*>(&e))
+        std::cerr << tmp->what() << ' ' << tmp->id << std::endl;
+    else
+        std::cerr << e.what() << std::endl;
+    return true;
 }
 
 }

@@ -13,7 +13,8 @@ else()
         runner.hpp
         input.cpp
         input.hpp
-        streams.hpp
+        stream.cpp
+        stream.hpp
         types.hpp
         )
 

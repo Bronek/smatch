@@ -3,7 +3,7 @@
 #include "types.hpp"
 #include "input.hpp"
 #include "engine.hpp"
-#include "streams.hpp"
+#include "stream.hpp"
 
 namespace smatch {
 
@@ -12,21 +12,21 @@ struct Runner
     template<typename In, typename Out>
     static void run(Engine& e, In& in, Out& out)
     {
-        // Use overloading and ADL to construct writer appropriate for Out type
-        auto wr = writer(out);
+        // Use overloading and ADL to construct communication channel wrapper appropriate for In/Out
+        auto&& ch = channel(in, out);
         Input i;
 
         for (;;) {
             // Handle own exceptions (e.g. bad input or bad order id) per each input
             try {
-                // Use overloading and ADL to populate Input from In type
-                if (not read(i, in))
+                if (not ch.read(i))
                     return;
 
-                handle(i, e, wr);
+                handle(i, e, ch);
             }
             catch(const smatch::exception& e) {
-                std::cerr << e.what() << std::endl;
+                if (not ch.report(e, true))
+                    throw;
             }
         }
     }

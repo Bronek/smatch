@@ -3,7 +3,7 @@
 #include "types.hpp"
 #include "input.hpp"
 #include "book.hpp"
-#include "streams.hpp"
+#include "stream.hpp"
 
 #include <vector>
 

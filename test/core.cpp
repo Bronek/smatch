@@ -14,10 +14,10 @@ TEST_CASE("not infinite loop on empty input", "[core]") {
 namespace {
     struct DummyFail1 { };
     struct TestException1 { };
-    smatch::OstreamWriter writer(DummyFail1& ) { throw TestException1(); }
+    smatch::Stream channel(std::istream&, DummyFail1& ) { throw TestException1(); }
 }
 
-TEST_CASE("exception creating writer is passed through", "[core][exceptions]") {
+TEST_CASE("exception creating channel is passed through", "[core][exceptions]") {
     using namespace smatch;
     std::istringstream in;
     DummyFail1 d1;
@@ -26,50 +26,94 @@ TEST_CASE("exception creating writer is passed through", "[core][exceptions]") {
 }
 
 namespace {
-    struct DummyFail2 {
-        int i;
-    };
-
     struct TestException2 : smatch::exception {
         using smatch::exception::exception;
     };
-    bool read(smatch::Input&, DummyFail2& d) {
-        if (--d.i == 0)
-            return false;
-        throw TestException2("");
-    }
+
+    struct DummyFail2 {
+        int i;
+        bool r;
+
+        bool read(smatch::Input& ) {
+            if (--i == 0)
+                return false;
+            throw TestException2("");
+        }
+
+        bool report(const smatch::exception&, bool) { return r; }
+        void write(const smatch::Match&) { }
+        void write(const smatch::Order&) { }
+    };
+
+    DummyFail2 channel(DummyFail2& d, std::ostream&) { return d; }
 }
 
-TEST_CASE("exceptions derived from smatch::exception when reading are swallowed", "[core][exceptions]") {
+TEST_CASE("exceptions derived from smatch::exception when reading are swallowed, or not", "[core][exceptions]") {
     using namespace smatch;
     std::ostringstream out;
-    DummyFail2 d2 = {3};
+    DummyFail2 d2 = {3 , true};
     Engine en;
     REQUIRE_NOTHROW(Runner::run(en, d2, out));
+
+    DummyFail2 d3 = {2 , false};
+    REQUIRE_THROWS_AS(Runner::run(en, d3, out), TestException2);
 }
 
-TEST_CASE("exceptions when parsing or handling bad input are swallowed", "[core][exceptions][parsing]") {
+namespace {
+    struct TestException3 : std::runtime_error {
+        TestException3() : runtime_error("") { }
+    };
+
+    struct DummyFail3 {
+        bool read(smatch::Input& ) {
+            throw TestException3();
+        }
+
+        bool report(const smatch::exception&, bool) { return true; }
+        void write(const smatch::Match&) { }
+        void write(const smatch::Order&) { }
+    };
+
+    DummyFail3 channel(DummyFail3& d, std::ostream&) { return d; }
+}
+
+
+TEST_CASE("exceptions not derived from smatch::exception are not swallowed", "[core][exceptions]") {
+    using namespace smatch;
+    std::ostringstream out;
+    DummyFail3 d3;
+    Engine en;
+    REQUIRE_THROWS_AS(Runner::run(en, d3, out), TestException3);
+}
+
+namespace {
+    struct DummyFail4 : smatch::Stream {
+        DummyFail4(std::istream& in, std::ostream& out) : Stream(in, out) {}
+        DummyFail4(std::istream& , DummyFail4& src) : Stream(src) { }
+
+        bool report(const smatch::exception&, bool) { return false; }
+    };
+
+    DummyFail4 channel(std::istream&, DummyFail4& d) { return d; }
+}
+
+TEST_CASE("exceptions on bad input are passed through, when requested", "[core][exceptions][parsing]") {
     using namespace smatch;
     std::istringstream in (
-        "L B 1 100\n" // too few inputs
-        "I B 1 1020 100 50 50\n" // too many inputs
-        "F B 1 1020 100\n" // unrecognized
-        "C 100\n" // correct format, but invalid order id
-        "L S 1 1020 100\n" // want to see this one on output
-        "L S 1 1020 100\n" // duplicate order id
-        "M B 2 100\n" // market order
+        "L S 1 1020 100\n"
+        "L S 1 1020 100\n" // duplicate id
+        "L B 2 1010 100\n" // dropped due to exception
     );
     std::ostringstream out;
+    DummyFail4 d4 {in, out};
     Engine en;
-    REQUIRE_NOTHROW(Runner::run(en, in, out));
-    REQUIRE(out.str() ==
-        "O S 1 1020 100\n"
-        "M 2 1 1020 100\n"
-    );
+    REQUIRE_THROWS_AS(Runner::run(en, in, d4), bad_order_id);
+    REQUIRE(out.str() == "O S 1 1020 100\n");
 }
 
-TEST_CASE("parsing stream inputs", "[core][parsing]") {
+TEST_CASE("parsing bad stream inputs", "[core][parsing]") {
     using namespace smatch;
+    std::ostringstream dummy;
     std::istringstream in (
         "\n"
         "# Test\n"
@@ -88,41 +132,42 @@ TEST_CASE("parsing stream inputs", "[core][parsing]") {
         "F B 1 1020 100\n" // unrecognized
     );
 
+    Stream s(in, dummy);
     Input t;
-    REQUIRE(read(t, in)); // empty line
+    REQUIRE(s.read(t)); // empty line
     REQUIRE(t.empty());
 
-    REQUIRE(read(t, in)); // comment
+    REQUIRE(s.read(t)); // comment
     REQUIRE(t.empty());
 
-    REQUIRE(read(t, in)); // another empty line
+    REQUIRE(s.read(t)); // another empty line
     REQUIRE(t.empty());
 
-    REQUIRE_THROWS_AS(read(t, in), bad_input); // too few inputs
+    REQUIRE_THROWS_AS(s.read(t), bad_input); // too few inputs
 
-    REQUIRE_THROWS_AS(read(t, in), bad_input); // unrecognized side 'U'
+    REQUIRE_THROWS_AS(s.read(t), bad_input); // unrecognized side 'U'
 
-    REQUIRE(read(t, in)); // limit order
+    REQUIRE(s.read(t)); // limit order
     REQUIRE(not t.empty());
 
-    REQUIRE(read(t, in)); // iceberg order
+    REQUIRE(s.read(t)); // iceberg order
     REQUIRE(not t.empty());
 
-    REQUIRE_THROWS_AS(read(t, in), bad_input); // too many inputs
+    REQUIRE_THROWS_AS(s.read(t), bad_input); // too many inputs
 
-    REQUIRE_THROWS_AS(read(t, in), bad_input); // too few inputs
+    REQUIRE_THROWS_AS(s.read(t), bad_input); // too few inputs
 
-    REQUIRE_THROWS_AS(read(t, in), bad_input); // wrong number format
+    REQUIRE_THROWS_AS(s.read(t), bad_input); // wrong number format
 
-    REQUIRE(read(t, in)); // cancel
+    REQUIRE(s.read(t)); // cancel
 
-    REQUIRE_THROWS_AS(read(t, in), bad_input); // too few inputs
+    REQUIRE_THROWS_AS(s.read(t), bad_input); // too few inputs
 
-    REQUIRE(read(t, in)); // market order
+    REQUIRE(s.read(t)); // market order
 
-    REQUIRE(read(t, in)); // aggress order
+    REQUIRE(s.read(t)); // aggress order
 
-    REQUIRE_THROWS_AS(read(t, in), bad_input); // unrecognized
+    REQUIRE_THROWS_AS(s.read(t), bad_input); // unrecognized
 
-    REQUIRE(not read(t, in)); // EOF
+    REQUIRE(not s.read(t)); // EOF
 }

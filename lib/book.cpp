@@ -4,11 +4,6 @@
 
 namespace smatch {
 
-struct bad_order_id : smatch::exception
-{
-    using exception::exception;
-};
-
 Order& Book::insert(const Order& o)
 {
     // BuySell is what we store in ids_, to allow us to quickly find orders by id
@@ -18,7 +13,7 @@ Order& Book::insert(const Order& o)
 
     // Enforce that ids are unique
     if (not it.second)
-        throw bad_order_id("Order id must be unique");
+        throw bad_order_id("Duplicate order id", o.id);
 
     // A shortcut for storing buy or sell iterator into BuySell we just inserted into ids_
     auto& os = it.first->second;
@@ -43,7 +38,7 @@ void Book::remove(uint id)
 {
     const auto i = ids_.find(id);
     if (i == ids_.end())
-        throw bad_order_id("Order id is invalid");
+        throw bad_order_id("Invalid order id", id);
 
     if (i->second.buy != buys_.end())
         buys_.erase(i->second.buy);

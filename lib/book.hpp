@@ -9,6 +9,14 @@
 
 namespace smatch {
 
+struct bad_order_id : smatch::exception
+{
+    const uint id;
+
+    bad_order_id(const char* sz , uint id) : exception(sz) , id(id)
+    { }
+};
+
 class Book
 {
     // For storing orders in an ordered collection, prioritized by price and order received
