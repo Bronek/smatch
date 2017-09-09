@@ -116,3 +116,114 @@ TEST_CASE("insert and remove orders", "[exceptions][book]") {
     REQUIRE(&os4->second == &o4);
 }
 
+namespace {
+    smatch::Order buy(unsigned int id, unsigned int price, unsigned int size) {
+        return smatch::Order{smatch::Side::Buy, id, price, size, size, size, true, 0};
+    }
+
+    smatch::Order sell(unsigned int id, unsigned int price, unsigned int size) {
+        return smatch::Order{smatch::Side::Sell, id, price, size, size, size, true, 0};
+    }
+
+    bool operator==(const smatch::Order& lh, const smatch::Order& rh) {
+        return lh.side == rh.side
+               && lh.id == rh.id
+               && lh.price == rh.price
+               && lh.size == rh.size
+               && lh.full == rh.full
+               && lh.peak == rh.peak
+               && lh.add == rh.add;
+    }
+
+    template <smatch::Side side>
+    bool same_orders(const std::vector<smatch::Order>& lh, const decltype((static_cast<const smatch::Book*>(nullptr))->orders<side>())& rh) {
+        auto i = rh.begin();
+        for (const auto& l : lh){
+            if (i == rh.end())
+                return false;
+            if (not (l == i->second))
+                return false;
+            ++i;
+        }
+        return i == rh.end();
+    }
+
+    bool operator==(const smatch::Match& lh, const smatch::Match& rh) {
+        return lh.buyId == rh.buyId
+               && lh.sellId == rh.sellId
+               && lh.price == rh.price
+               && lh.size == rh.size;
+    }
+}
+
+TEST_CASE("matching and sorting of buy orders", "[book][sorting][matching]") {
+    using namespace smatch;
+    Book book;
+    const Book& cbook = book; // shortcut for 'const_cast<const Book&>(book)'
+
+    const auto& o1 = book.insert(buy(1, 1010, 200));
+    const auto& o2 = book.insert(buy(2, 1010, 200));
+    const auto& o3 = book.insert(buy(3, 1030, 200));
+    const auto& o4 = book.insert(buy(4, 1010, 200));
+    const auto& o5 = book.insert(buy(5, 1000, 200));
+    REQUIRE(cbook.orders<Side::Buy>().size() == 5);
+
+    // Check sort order of new orders : first by price, then by serial (which coincides with id)
+    std::vector<Order> buys;
+    buys.push_back(Order{Side::Buy, 3, 1030, 200, 200, 200, true, 0});
+    buys.push_back(Order{Side::Buy, 1, 1010, 200, 200, 200, true, 0});
+    buys.push_back(Order{Side::Buy, 2, 1010, 200, 200, 200, true, 0});
+    buys.push_back(Order{Side::Buy, 4, 1010, 200, 200, 200, true, 0});
+    buys.push_back(Order{Side::Buy, 5, 1000, 200, 200, 200, true, 0});
+    REQUIRE(same_orders<Side::Buy>(buys, cbook.orders<Side::Buy>()));
+
+    // Replace top order 3 at 1030 with another top order 6 at 1020
+    book.remove(3);
+    buys.erase(buys.begin());
+    REQUIRE(same_orders<Side::Buy>(buys, cbook.orders<Side::Buy>()));
+
+    const auto& o6 = book.insert(buy(6, 1020, 200));
+    buys.insert(buys.begin(), Order{Side::Buy, 6, 1020, 200, 200, 200, true, 0});
+    REQUIRE(same_orders<Side::Buy>(buys, cbook.orders<Side::Buy>()));
+
+    // Remove order 4 in the middle
+    book.remove(4);
+    auto i = buys.begin();
+    std::advance(i, 3);
+    buys.erase(i);
+    REQUIRE(same_orders<Side::Buy>(buys, cbook.orders<Side::Buy>()));
+
+    // Match sell order 7 at 1010
+    auto&& o7 = sell(7, 1010, 450);
+    std::vector<Match> matches;
+    book.match<Side::Sell>(o7, matches);
+
+    REQUIRE(matches.size() == 3);
+    REQUIRE(matches[0] == (Match{6, 7, 1020, 200}));
+    REQUIRE(matches[1] == (Match{1, 7, 1010, 200}));
+    REQUIRE(matches[2] == (Match{2, 7, 1010, 50}));
+
+    // Only two orders left, of which order 2 is partially filled now
+    buys.clear();
+    buys.push_back(Order{Side::Buy, 2, 1010, 150, 150, 200, true, 0});
+    buys.push_back(Order{Side::Buy, 5, 1000, 200, 200, 200, true, 0});
+    REQUIRE(same_orders<Side::Buy>(buys, cbook.orders<Side::Buy>()));
+
+    // Add new top order
+    const auto& o8 = book.insert(buy(8, 1020, 200));
+    buys.insert(buys.begin(), Order{Side::Buy, 8, 1020, 200, 200, 200, true, 0});
+    REQUIRE(same_orders<Side::Buy>(buys, cbook.orders<Side::Buy>()));
+
+    // Add second level order at 1010 - must be last at this price level
+    const auto& o9 = book.insert(buy(9, 1010, 200));
+    i = buys.begin();
+    std::advance(i, 2);
+    buys.insert(i, Order{Side::Buy, 9, 1010, 200, 200, 200, true, 0});
+    REQUIRE(same_orders<Side::Buy>(buys, cbook.orders<Side::Buy>()));
+
+    // We currently have orders 8, 2, 9 and 5. Check the references are still valid.
+    REQUIRE(buys[0] == o8);
+    REQUIRE(buys[1] == o2);
+    REQUIRE(buys[2] == o9);
+    REQUIRE(buys[3] == o5);
+}
