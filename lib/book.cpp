@@ -4,6 +4,13 @@
 
 namespace smatch {
 
+namespace {
+    // Special value for Order.match, set at the end of Book::insert(). 0 is not good because the
+    // purpose of Order.match is to identify index of Match in vector passed to Book::match(), and
+    // of course first match added to this collection will have index 0
+    static constexpr size_t unmatched = std::numeric_limits<size_t>::max();
+}
+
 Order& Book::insert(const Order& o)
 {
     // BuySell is what we store in ids_, to allow us to quickly find orders by id
@@ -24,14 +31,17 @@ Order& Book::insert(const Order& o)
 
     // Store an order (limit or iceberg) in an appropriate collection buys_ or sells_
     // and persist the iterator for this element in BuySell created above.
+    Order* ret = nullptr;
     if (o.side == Side::Buy) {
         os.buy = buys_.emplace(pp, o).first;
-        return os.buy->second;
+        ret = &os.buy->second;
     }
     else {
         os.sell = sells_.emplace(pp, o).first;
-        return os.sell->second;
+        ret = &os.sell->second;
     }
+    ret->match = unmatched;
+    return *ret;
 }
 
 void Book::remove(uint id)
@@ -51,11 +61,6 @@ void Book::remove(uint id)
 template <Side side>
 void Book::match(Order& active, std::vector<Match>& matches)
 {
-    // Special value for active.match, set at the bottom of this function. "0" is not good because
-    // the purpose of active.match is to identify Match for matched order in matches vector, and of course
-    // first match added to this collection will have index 0
-    constexpr auto unmatched = std::numeric_limits<size_t>::max();
-
     // Active order is on "this side" and it will be matched against orders on the "opposite side"
     constexpr auto opposite = (side == Side::Buy ? Side::Sell : Side::Buy);
     auto& orders = this->orders<opposite>();
@@ -100,6 +105,7 @@ void Book::match(Order& active, std::vector<Match>& matches)
             if (copy.full > 0)
             {
                 auto& renew = insert(copy);
+                renew.match = copy.match;
                 renew.size = std::min(copy.full, copy.peak);
             }
             else
@@ -117,7 +123,6 @@ void Book::match(Order& active, std::vector<Match>& matches)
         if (++i == count)
             break;
     }
-    active.match = unmatched;
 }
 
 // Explicit instantiations of the above, for Engine::handle() to use
