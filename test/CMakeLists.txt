@@ -7,6 +7,7 @@ set(SOURCE_FILES
     main.cpp
     catch.hpp
     core.cpp
+    book.cpp
     )
 
 add_subdirectory(../lib lib)
