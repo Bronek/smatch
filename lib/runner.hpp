@@ -37,9 +37,10 @@ struct Runner
         if (i.empty())
             return;
 
-        // Function Input.handle() returns true only if any matches found (and stored in e)
-        if (i.handle(e)) {
-            for (const auto &m : e.matches())
+        // Function Input.handle() returns true only if any matches found (and stored in m)
+        thread_local static Engine::matches_t m;
+        if (i.handle(e, m)) {
+            for (const auto &m : m)
                 wr.write(m);
         }
 

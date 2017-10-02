@@ -1,7 +1,6 @@
 #pragma once
 
 #include "types.hpp"
-#include "input.hpp"
 #include "book.hpp"
 #include "stream.hpp"
 
@@ -12,27 +11,26 @@ namespace smatch {
 class Engine
 {
     Book                book_;
-    std::vector<Match>  matches_;
 
 public:
+    using matches_t = std::vector<Match>;
     constexpr const auto& book() const { return book_; }
-    constexpr const auto& matches() const { return matches_; }
 
     template <Side side>
-    bool order(const Order& o)
+    bool order(const Order& o, matches_t& matches)
     {
-        // Vector matches_ is used as-if on stack, but must be accessible after exit from this function
-        matches_.clear();
+        // Empty collection of matches on input is important precondition for the matching algorithm
+        matches.clear();
 
         // Copy order received, perform matching first
         Order active = o;
-        book_.match<side>(active, matches_);
+        book_.match<side>(active, matches);
 
         // If there is any remaining liquidity in the active order, add it to the book_
         if (active.add && active.size > 0)
             book_.insert(active);
 
-        return not matches_.empty();
+        return not matches.empty();
     }
 
     bool cancel(const Cancel& c)

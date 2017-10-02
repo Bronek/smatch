@@ -11,7 +11,6 @@ else()
         book.hpp
         engine.hpp
         runner.hpp
-        input.cpp
         input.hpp
         stream.cpp
         stream.hpp

@@ -1,13 +1,11 @@
 #pragma once
 
 #include "types.hpp"
+#include "engine.hpp"
 
 #include <stdexcept>
 
 namespace smatch {
-
-// Need forward declaration here
-class Engine;
 
 // Employ Visitor pattern using a different kind of dynamic polymorphism without vtable that is,
 // rather than 2 levels of indirection (vtable and function pointer) use just one i.e. function
@@ -19,14 +17,21 @@ class Input
         Cancel c;
     } input;
 
-    typedef bool (Input::*Type)(Engine&) const;
+    typedef bool (Input::*Type)(Engine&, Engine::matches_t&) const;
     Type type;
 
-    // These need to be defined in a .cpp, after full definition of Engine. The return value is
-    // to be set by callee of the functions below (Engine) and interpreted by caller of update()
-    template <Side side> bool order(Engine&) const;
-    bool cancel(Engine&) const;
-    bool noop(Engine&) const
+    // The return value is to be set by Engine and interpreted by caller of update()
+    template <Side side> bool order(Engine& e, Engine::matches_t& m) const
+    {
+        return e.order<side>(input.o, m);
+    }
+
+    bool cancel(Engine& e, Engine::matches_t&) const
+    {
+        return e.cancel(input.c);
+    }
+
+    bool noop(Engine&, Engine::matches_t&) const
     {
         return false;
     }
@@ -46,9 +51,9 @@ public:
         input.c = c;
     }
 
-    bool handle(Engine& e) const
+    bool handle(Engine& e, Engine::matches_t& m) const
     {
-        return (this->*type)(e);
+        return (this->*type)(e, m);
     }
 
     bool empty() const { return type == &Input::noop; }
